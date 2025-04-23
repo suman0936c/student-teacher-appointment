@@ -115,6 +115,10 @@ function showSuccess(message) {
 // Function to show error message
 function showError(elementId, message) {
     const errorElement = document.getElementById(elementId);
-    errorElement.textContent = message;
-    errorElement.style.display = 'block';
+    if (errorElement) {
+        errorElement.textContent = message;
+        errorElement.style.display = 'block';
+    } else {
+        console.error(`Error element with id '${elementId}' not found. Error message: ${message}`);
+    }
 } 
