@@ -1,6 +1,7 @@
 // Get DOM elements
 const bookingForm = document.getElementById('booking-form');
-const appointmentsList = document.getElementById('appointments-list');
+const teacherAppointmentsList = document.getElementById('teacher-appointments-list');
+const studentAppointmentsList = document.getElementById('student-appointments-list');
 const teacherList = document.getElementById('teacher-list');
 const studentList = document.getElementById('student-list');
 
@@ -41,6 +42,8 @@ async function handleBookingSubmit(e) {
         const user = firebase.auth().currentUser;
         if (!user) throw new Error('User not authenticated');
         
+        console.log('Creating appointment for student:', user.uid);
+        
         const teacherDoc = await firebase.firestore().collection('users').doc(teacherId).get();
         const teacherData = teacherDoc.data();
         
@@ -56,11 +59,17 @@ async function handleBookingSubmit(e) {
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         
-        await firebase.firestore().collection('appointments').add(appointment);
+        console.log('Appointment data to be saved:', appointment);
+        
+        const docRef = await firebase.firestore().collection('appointments').add(appointment);
+        console.log('Appointment created with ID:', docRef.id);
         
         // Show success message
         showSuccess('Appointment booked successfully!');
         bookingForm.reset();
+        
+        // Reload appointments for both student and teacher
+        loadStudentAppointments(user.uid);
         loadTeacherAppointments(teacherId);
     } catch (error) {
         console.error('Error submitting booking:', error);
@@ -71,50 +80,92 @@ async function handleBookingSubmit(e) {
 // Load teacher's appointments
 async function loadTeacherAppointments(teacherId) {
     try {
+        console.log('Loading teacher appointments for:', teacherId);
         const appointmentsRef = firebase.firestore().collection('appointments')
-            .where('teacherId', '==', teacherId)
-            .orderBy('date', 'asc')
-            .orderBy('time', 'asc');
+            .where('teacherId', '==', teacherId);
             
         const snapshot = await appointmentsRef.get();
+        console.log('Found appointments:', snapshot.size);
         
-        if (appointmentsList) {
-            appointmentsList.innerHTML = '';
+        if (teacherAppointmentsList) {
+            teacherAppointmentsList.innerHTML = '';
             
+            if (snapshot.empty) {
+                console.log('No appointments found for teacher');
+                teacherAppointmentsList.innerHTML = '<p>No appointments found</p>';
+                return;
+            }
+            
+            // Sort appointments by date and time
+            const appointments = [];
             snapshot.forEach(doc => {
-                const appointment = doc.data();
-                const appointmentElement = createAppointmentElement(doc.id, appointment);
-                appointmentsList.appendChild(appointmentElement);
+                appointments.push({ id: doc.id, ...doc.data() });
             });
+            
+            appointments.sort((a, b) => {
+                const dateA = new Date(a.date + 'T' + a.time);
+                const dateB = new Date(b.date + 'T' + b.time);
+                return dateA - dateB;
+            });
+            
+            appointments.forEach(appointment => {
+                const appointmentElement = createAppointmentElement(appointment.id, appointment);
+                teacherAppointmentsList.appendChild(appointmentElement);
+            });
+        } else {
+            console.log('Teacher appointments list element not found');
         }
     } catch (error) {
         console.error('Error loading appointments:', error);
-        showError('appointments-error', 'Failed to load appointments');
+        if (document.getElementById('appointments-error')) {
+            showError('appointments-error', 'Failed to load appointments');
+        }
     }
 }
 
 // Load student's appointments
 async function loadStudentAppointments(studentId) {
     try {
+        console.log('Loading student appointments for:', studentId);
         const appointmentsRef = firebase.firestore().collection('appointments')
-            .where('studentId', '==', studentId)
-            .orderBy('date', 'asc')
-            .orderBy('time', 'asc');
+            .where('studentId', '==', studentId);
             
         const snapshot = await appointmentsRef.get();
+        console.log('Found appointments:', snapshot.size);
         
-        if (appointmentsList) {
-            appointmentsList.innerHTML = '';
+        if (studentAppointmentsList) {
+            studentAppointmentsList.innerHTML = '';
             
+            if (snapshot.empty) {
+                console.log('No appointments found for student');
+                studentAppointmentsList.innerHTML = '<p>No appointments found</p>';
+                return;
+            }
+            
+            // Sort appointments by date and time
+            const appointments = [];
             snapshot.forEach(doc => {
-                const appointment = doc.data();
-                const appointmentElement = createAppointmentElement(doc.id, appointment);
-                appointmentsList.appendChild(appointmentElement);
+                appointments.push({ id: doc.id, ...doc.data() });
             });
+            
+            appointments.sort((a, b) => {
+                const dateA = new Date(a.date + 'T' + a.time);
+                const dateB = new Date(b.date + 'T' + b.time);
+                return dateA - dateB;
+            });
+            
+            appointments.forEach(appointment => {
+                const appointmentElement = createAppointmentElement(appointment.id, appointment);
+                studentAppointmentsList.appendChild(appointmentElement);
+            });
+        } else {
+            console.log('Student appointments list element not found');
         }
     } catch (error) {
         console.error('Error loading appointments:', error);
-        showError('appointments-error', 'Failed to load appointments');
+        if (document.getElementById('appointments-error')) {
+            showError('appointments-error', 'Failed to load appointments');
+        }
     }
 }
 
@@ -245,6 +296,8 @@ async function loadAppointments() {
 
 // Create appointment element
 function createAppointmentElement(id, appointment) {
+    console.log('Creating appointment element for:', appointment);
+    
     const div = document.createElement('div');
     div.className = 'appointment-card';
     
@@ -253,7 +306,7 @@ function createAppointmentElement(id, appointment) {
     const formattedDate = date.toLocaleDateString();
     const formattedTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
-    div.innerHTML = `
+    const appointmentHTML = `
         <div class="appointment-header">
             <h4>Appointment with ${appointment.teacherName}</h4>
             <span class="status ${appointment.status}">${appointment.status}</span>
@@ -269,6 +322,8 @@ function createAppointmentElement(id, appointment) {
         </div>
     `;
     
+    div.innerHTML = appointmentHTML;
+    console.log('Created appointment element:', div);
     return div;
 }
 
