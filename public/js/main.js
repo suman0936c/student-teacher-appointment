@@ -121,4 +121,71 @@ function showError(elementId, message) {
     } else {
         console.error(`Error element with id '${elementId}' not found. Error message: ${message}`);
     }
+}
+
+async function loadAppointments() {
+    try {
+        const user = firebase.auth().currentUser;
+        if (!user) return;
+
+        const userDoc = await firebase.firestore().collection('users').doc(user.uid).get();
+        const userData = userDoc.data();
+
+        if (userData.role === 'teacher') {
+            // Load teacher's appointments
+            const appointmentsRef = firebase.firestore().collection('appointments')
+                .where('teacherId', '==', user.uid)
+                .orderBy('date', 'desc')
+                .orderBy('time', 'desc');
+
+            appointmentsRef.onSnapshot(snapshot => {
+                const appointmentsList = document.getElementById('teacher-appointments-list');
+                if (!appointmentsList) return;
+
+                appointmentsList.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const appointment = doc.data();
+                    const appointmentElement = createAppointmentElement(appointment, doc.id);
+                    appointmentsList.appendChild(appointmentElement);
+                });
+            }, error => {
+                if (error.code === 'failed-precondition' || error.message.includes('ERR_BLOCKED_BY_CLIENT')) {
+                    console.warn('Firebase connection blocked. Please check your ad blocker settings.');
+                    showError('teacher-appointments-error', 'Unable to load appointments. Please disable your ad blocker for this site.');
+                } else {
+                    console.error('Error loading appointments:', error);
+                    showError('teacher-appointments-error', 'Error loading appointments. Please try again later.');
+                }
+            });
+        } else {
+            // Load student's appointments
+            const appointmentsRef = firebase.firestore().collection('appointments')
+                .where('studentId', '==', user.uid)
+                .orderBy('date', 'desc')
+                .orderBy('time', 'desc');
+
+            appointmentsRef.onSnapshot(snapshot => {
+                const appointmentsList = document.getElementById('student-appointments-list');
+                if (!appointmentsList) return;
+
+                appointmentsList.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const appointment = doc.data();
+                    const appointmentElement = createAppointmentElement(appointment, doc.id);
+                    appointmentsList.appendChild(appointmentElement);
+                });
+            }, error => {
+                if (error.code === 'failed-precondition' || error.message.includes('ERR_BLOCKED_BY_CLIENT')) {
+                    console.warn('Firebase connection blocked. Please check your ad blocker settings.');
+                    showError('student-appointments-error', 'Unable to load appointments. Please disable your ad blocker for this site.');
+                } else {
+                    console.error('Error loading appointments:', error);
+                    showError('student-appointments-error', 'Error loading appointments. Please try again later.');
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error in loadAppointments:', error);
+        showError('appointments-error', 'Error loading appointments. Please try again later.');
+    }
 } 
