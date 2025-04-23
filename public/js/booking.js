@@ -117,8 +117,12 @@ async function loadTeacherAppointments(teacherId) {
         }
     } catch (error) {
         console.error('Error loading appointments:', error);
-        if (document.getElementById('appointments-error')) {
-            showError('appointments-error', 'Failed to load appointments');
+        if (document.getElementById('teacher-appointments-error')) {
+            if (error.message.includes('index is currently building')) {
+                showError('teacher-appointments-error', 'Appointments are being indexed. Please try again in a few minutes.');
+            } else {
+                showError('teacher-appointments-error', 'Failed to load appointments: ' + error.message);
+            }
         }
     }
 }
@@ -163,8 +167,12 @@ async function loadStudentAppointments(studentId) {
         }
     } catch (error) {
         console.error('Error loading appointments:', error);
-        if (document.getElementById('appointments-error')) {
-            showError('appointments-error', 'Failed to load appointments');
+        if (document.getElementById('student-appointments-error')) {
+            if (error.message.includes('index is currently building')) {
+                showError('student-appointments-error', 'Appointments are being indexed. Please try again in a few minutes.');
+            } else {
+                showError('student-appointments-error', 'Failed to load appointments: ' + error.message);
+            }
         }
     }
 }
