@@ -7,12 +7,15 @@ class App {
         this.initializeEventListeners();
     }
 
-    // Initialize event listeners
     initializeEventListeners() {
         // Navigation links
-        document.getElementById('home-link').addEventListener('click', () => this.showView('home'));
-        document.getElementById('login-link').addEventListener('click', () => this.showView('login'));
-        document.getElementById('register-link').addEventListener('click', () => this.showView('register'));
+        document.getElementById('home-link').addEventListener('click', () => this.showHome());
+        document.getElementById('login-link').addEventListener('click', () => this.showLogin());
+        document.getElementById('register-link').addEventListener('click', () => this.showRegister());
+
+        // Forms
+        document.getElementById('login-form').addEventListener('submit', (e) => this.handleLogin(e));
+        document.getElementById('register-form').addEventListener('submit', (e) => this.handleRegister(e));
 
         // Check authentication state
         firebase.auth().onAuthStateChanged((user) => {
@@ -179,45 +182,130 @@ class App {
 
     // Load user dashboard
     async loadUserDashboard() {
-        const user = this.auth.getCurrentUser();
+        this.hideAllSections();
+        const dashboardSection = document.getElementById('dashboard-section');
+        const dashboardContent = document.getElementById('dashboard-content');
+        dashboardSection.style.display = 'block';
+
+        const user = this.auth.currentUser;
         if (!user) return;
 
-        const userData = await this.auth.getUserData(user.uid);
-        const mainContent = document.getElementById('main-content');
+        try {
+            const userDoc = await this.db.collection('users').doc(user.uid).get();
+            const userData = userDoc.data();
 
-        if (userData.userType === 'student') {
-            mainContent.innerHTML = this.getStudentDashboard(userData);
-        } else if (userData.userType === 'teacher') {
-            mainContent.innerHTML = this.getTeacherDashboard(userData);
+            if (userData.userType === 'student') {
+                this.loadStudentDashboard(dashboardContent);
+            } else if (userData.userType === 'teacher') {
+                this.loadTeacherDashboard(dashboardContent);
+            }
+        } catch (error) {
+            console.error('Error loading dashboard:', error);
+            dashboardContent.innerHTML = '<p>Error loading dashboard. Please try again.</p>';
         }
     }
 
-    // Get student dashboard HTML
-    getStudentDashboard(userData) {
-        return `
-            <div class="dashboard-container">
-                <h2>Welcome, ${userData.name}</h2>
-                <div class="dashboard-actions">
-                    <button onclick="app.showTeacherList()">Find Teachers</button>
-                    <button onclick="app.showMyAppointments()">My Appointments</button>
-                    <button onclick="app.showMessages()">Messages</button>
+    loadStudentDashboard(container) {
+        container.innerHTML = `
+            <div class="dashboard-grid">
+                <div class="dashboard-card">
+                    <h3>Book Appointment</h3>
+                    <button onclick="app.showBookAppointment()">Book New Appointment</button>
+                </div>
+                <div class="dashboard-card">
+                    <h3>My Appointments</h3>
+                    <div id="student-appointments"></div>
                 </div>
             </div>
         `;
+        this.loadStudentAppointments();
     }
 
-    // Get teacher dashboard HTML
-    getTeacherDashboard(userData) {
-        return `
-            <div class="dashboard-container">
-                <h2>Welcome, ${userData.name}</h2>
-                <div class="dashboard-actions">
-                    <button onclick="app.showSchedule()">Manage Schedule</button>
-                    <button onclick="app.showAppointments()">View Appointments</button>
-                    <button onclick="app.showMessages()">Messages</button>
+    loadTeacherDashboard(container) {
+        container.innerHTML = `
+            <div class="dashboard-grid">
+                <div class="dashboard-card">
+                    <h3>Schedule Management</h3>
+                    <button onclick="app.showScheduleManagement()">Manage Schedule</button>
+                </div>
+                <div class="dashboard-card">
+                    <h3>Upcoming Appointments</h3>
+                    <div id="teacher-appointments"></div>
                 </div>
             </div>
         `;
+        this.loadTeacherAppointments();
+    }
+
+    async loadStudentAppointments() {
+        const container = document.getElementById('student-appointments');
+        const user = this.auth.currentUser;
+        if (!user) return;
+
+        try {
+            const appointments = await this.db
+                .collection('appointments')
+                .where('studentId', '==', user.uid)
+                .orderBy('date', 'desc')
+                .get();
+
+            if (appointments.empty) {
+                container.innerHTML = '<p>No appointments found.</p>';
+                return;
+            }
+
+            const appointmentsList = appointments.docs.map(doc => {
+                const data = doc.data();
+                return `
+                    <div class="appointment-card">
+                        <p>Date: ${new Date(data.date.toDate()).toLocaleDateString()}</p>
+                        <p>Time: ${data.time}</p>
+                        <p>Status: ${data.status}</p>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = appointmentsList;
+        } catch (error) {
+            console.error('Error loading appointments:', error);
+            container.innerHTML = '<p>Error loading appointments. Please try again.</p>';
+        }
+    }
+
+    async loadTeacherAppointments() {
+        const container = document.getElementById('teacher-appointments');
+        const user = this.auth.currentUser;
+        if (!user) return;
+
+        try {
+            const appointments = await this.db
+                .collection('appointments')
+                .where('teacherId', '==', user.uid)
+                .orderBy('date', 'desc')
+                .get();
+
+            if (appointments.empty) {
+                container.innerHTML = '<p>No appointments found.</p>';
+                return;
+            }
+
+            const appointmentsList = appointments.docs.map(doc => {
+                const data = doc.data();
+                return `
+                    <div class="appointment-card">
+                        <p>Date: ${new Date(data.date.toDate()).toLocaleDateString()}</p>
+                        <p>Time: ${data.time}</p>
+                        <p>Student: ${data.studentName}</p>
+                        <p>Status: ${data.status}</p>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = appointmentsList;
+        } catch (error) {
+            console.error('Error loading appointments:', error);
+            container.innerHTML = '<p>Error loading appointments. Please try again.</p>';
+        }
     }
 
     // Handle logout
@@ -227,6 +315,55 @@ class App {
             this.showView('home');
         } catch (error) {
             alert('Logout failed: ' + error.message);
+        }
+    }
+
+    showHome() {
+        this.hideAllSections();
+        document.getElementById('login-section').style.display = 'block';
+    }
+
+    showLogin() {
+        this.hideAllSections();
+        document.getElementById('login-section').style.display = 'block';
+    }
+
+    showRegister() {
+        this.hideAllSections();
+        document.getElementById('register-section').style.display = 'block';
+    }
+
+    hideAllSections() {
+        document.getElementById('login-section').style.display = 'none';
+        document.getElementById('register-section').style.display = 'none';
+        document.getElementById('dashboard-section').style.display = 'none';
+    }
+
+    async handleLogin(e) {
+        e.preventDefault();
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+
+        try {
+            await this.auth.login(email, password);
+            this.loadUserDashboard();
+        } catch (error) {
+            alert('Login failed: ' + error.message);
+        }
+    }
+
+    async handleRegister(e) {
+        e.preventDefault();
+        const name = document.getElementById('name').value;
+        const email = document.getElementById('reg-email').value;
+        const password = document.getElementById('reg-password').value;
+        const userType = document.getElementById('user-type').value;
+
+        try {
+            await this.auth.register(email, password, name, userType);
+            this.loadUserDashboard();
+        } catch (error) {
+            alert('Registration failed: ' + error.message);
         }
     }
 }

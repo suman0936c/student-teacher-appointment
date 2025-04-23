@@ -2,6 +2,39 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // Users collection rules
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && isOwner(userId);
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+
+    // Appointments collection rules
+    match /appointments/{appointmentId} {
+      allow read: if isAuthenticated() && (
+        resource.data.studentId == request.auth.uid ||
+        resource.data.teacherId == request.auth.uid
+      );
+      allow create: if isAuthenticated() && request.resource.data.studentId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        resource.data.studentId == request.auth.uid ||
+        resource.data.teacherId == request.auth.uid
+      );
+      allow delete: if isAuthenticated() && (
+        resource.data.studentId == request.auth.uid ||
+        resource.data.teacherId == request.auth.uid
+      );
+    }
 
     // This rule allows anyone with your Firestore database reference to view, edit,
     // and delete all data in your Firestore database. It is useful for getting
